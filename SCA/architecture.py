@@ -1,14 +1,15 @@
-import sklearn
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import seaborn as sns
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import matplotlib as mpl
-import scipy.io as sio
-import itertools
+import torch.nn.utils.parametrize as P
+
+class Sphere(nn.Module):
+    def __init__(self, dim=-1):
+        super().__init__()
+        self.dim = dim
+    def forward(self,X):
+        return X / X.norm(dim=self.dim,keepdim=True)
+    def right_inverse(self,X):
+        return X / X.norm(dim=self.dim,keepdim=True)
 
 class SCA_encoder(nn.Module):
     '''
@@ -41,18 +42,13 @@ class SCA_decoder(nn.Module):
         self,
         N: 100, # number of neurons
         K: 3, # dimensionality
-        Q: None # Initialization params
     ):
         super().__init__()
-        self.V = nn.Linear(K,N)
-        if Q != None:
-            QT = nn.Parameter(Q.transpose(1,0))
-            self.V.weight = QT
+        self.V = P.register_parametrization(nn.Linear(K,N),"weight",Sphere(dim=0))
         nn.init.constant_(self.V.bias,0)
 
     def forward(self, encoded_x):
-        normalized_V_weight = nn.functional.normalize(self.V.weight.data,dim=1)
-        self.V.weight.data = normalized_V_weight
         x_hat = self.V(encoded_x)
         return x_hat
+        
         

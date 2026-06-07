@@ -1,22 +1,13 @@
-import sklearn
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import seaborn as sns
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import matplotlib as mpl
-import scipy.io as sio
-import itertools
+import sys
 
-from SCA.architecture import SCA_decoder, SCA_encoder
-from SCA.training import training_loop
+from architecture import SCA_decoder, SCA_encoder
+from training import training_loop
 
 device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
-print(f"Using {device} device")
 
-def SCA(X,K,epochs = 100000):
+def SCA(X,K,epochs = 3000):
 
     #---Sub-functions---#
     def create_W(X):
@@ -38,16 +29,16 @@ def SCA(X,K,epochs = 100000):
     W = create_W(X)
 
     # Find Vh
-    U,S,Vh = torch.linalg.svd(torch.matmul(W,X))
+    U,S,Vh = torch.linalg.svd(W@X)
 
     # Find Q
     Q = Vh[0:K].transpose(1,0)
 
     # UV = QQT
-    QQT = torch.matmul(Q,Q.transpose(1,0))
+    QQT = Q@Q.transpose(1,0)
 
     # Calculate initialized reconstruction cost
-    init_reconstruction = torch.norm(torch.matmul(W,(X - (torch.matmul(X,QQT)))))**2
+    init_reconstruction = torch.sum((X - (X@QQT))**2)
 
     # Calculate initialized orthogonality cost if off-diagonal entries of VVT = 0.1
     # Since V is orthonormal, VVT - I is 0.1 everywhere except for diagonal, which is 0
@@ -55,7 +46,7 @@ def SCA(X,K,epochs = 100000):
     init_orth = torch.norm(init_orth)**2
 
     # Calculate initialized sparsity cost
-    init_sparse = torch.norm(torch.matmul(X,Q))
+    init_sparse = torch.sum(torch.abs(X@Q))
 
     # Algebraically rearrange to determine initalization lambdas
     lambda_init_orth = 0.1*init_reconstruction / init_orth
@@ -64,21 +55,33 @@ def SCA(X,K,epochs = 100000):
     #---Initializing the autoencoders---#
     
     QT = Q.transpose(1,0)
-    print(QT)
     encoder = SCA_encoder(N=N,K=K,Q=QT).to(device)
-    decoder = SCA_decoder(N=N,K=K,Q=QT).to(device)
-
+    decoder = SCA_decoder(N=N,K=K).to(device)
 
     #---Train the autoencoders---#
 
-    losses = training_loop(X=X,encoder=encoder,decoder=decoder,lambda_sparse = lambda_init_sparse,lambda_orth=lambda_init_orth,epochs=epochs)
+    encoder.train()
+    decoder.train()
+    losses = training_loop(X=X,W=W,encoder=encoder,decoder=decoder,lambda_sparse = lambda_init_sparse,lambda_orth=lambda_init_orth,epochs=epochs)
 
     #---Extract trained encoder-decoder state_dict---#
     encoder_state_dict = encoder.state_dict()
     decoder_state_dict = decoder.state_dict()
 
+    #print(torch.allclose(before_dict['U.weight'],encoder_state_dict['U.weight']))
+    latent = encoder(X.to(device))
+
     return {
         'encoder_state_dict':encoder_state_dict,
         'decoder_state_dict':decoder_state_dict,
-        'losses':losses
+        'losses':losses,
+        'latent':latent
     }
+
+def main():
+    X0 = torch.rand((15,10))
+    out = SCA(X0,2)
+    return out
+
+if __name__ == "__main__":
+    sys.exit(main())
