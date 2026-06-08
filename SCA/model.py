@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import sys
 
-from architecture import SCA_decoder, SCA_encoder
+from architecture import SCA_autoencoder
 from training import training_loop
 
 device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
@@ -32,10 +32,11 @@ def SCA(X,K,epochs = 3000):
     U,S,Vh = torch.linalg.svd(W@X)
 
     # Find Q
-    Q = Vh[0:K].transpose(1,0)
+    QT = Vh[0:K]
+    Q = QT.T
 
     # UV = QQT
-    QQT = Q@Q.transpose(1,0)
+    QQT = Q@QT
 
     # Calculate initialized reconstruction cost
     init_reconstruction = torch.sum((X - (X@QQT))**2)
@@ -54,29 +55,26 @@ def SCA(X,K,epochs = 3000):
 
     #---Initializing the autoencoders---#
     
-    QT = Q.transpose(1,0)
-    encoder = SCA_encoder(N=N,K=K,Q=QT).to(device)
-    decoder = SCA_decoder(N=N,K=K).to(device)
+    #QT = torch.randn(QT.shape)
+    autoencoder = SCA_autoencoder(N=N,K=K,Q=QT).to(device)
 
     #---Train the autoencoders---#
 
-    encoder.train()
-    decoder.train()
-    losses = training_loop(X=X,W=W,encoder=encoder,decoder=decoder,lambda_sparse = lambda_init_sparse,lambda_orth=lambda_init_orth,epochs=epochs)
+    autoencoder.train()
+    losses = training_loop(X=X,W=W,autoencoder = autoencoder,lambda_sparse = lambda_init_sparse,lambda_orth=lambda_init_orth,epochs=epochs)
 
     #---Extract trained encoder-decoder state_dict---#
-    encoder_state_dict = encoder.state_dict()
-    decoder_state_dict = decoder.state_dict()
+    autoencoder_state_dict = autoencoder.state_dict()
 
     #print(torch.allclose(before_dict['U.weight'],encoder_state_dict['U.weight']))
-    latent = encoder(X.to(device))
+    latent, out = autoencoder(X.to(device))
 
     return {
-        'encoder_state_dict':encoder_state_dict,
-        'decoder_state_dict':decoder_state_dict,
+        'autoencoder_state_dict':autoencoder_state_dict,
         'losses':losses,
         'latent':latent
     }
+
 
 def main():
     X0 = torch.rand((15,10))
