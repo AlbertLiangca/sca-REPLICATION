@@ -1,13 +1,16 @@
 import torch
 import torch.nn as nn
 import sys
+import numpy as np
 
 from architecture import SCA_autoencoder
 from training import training_loop
 
-device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
+from sklearn.decomposition import TruncatedSVD
 
-def SCA(X,K,epochs = 3000):
+device = "cpu"
+
+def SCA(X,K,W=None,epochs = 3000):
 
     #---Sub-functions---#
     def create_W(X):
@@ -26,37 +29,45 @@ def SCA(X,K,epochs = 3000):
     #---Determining Initialization Parameters and Hyperparameters---#
 
     # Sample_weight
-    W = create_W(X)
+    if W == None:
+        W = create_W(X)
 
-    # Find Vh
-    U,S,Vh = torch.linalg.svd(W@X)
+    svd = TruncatedSVD(K)
+    svd.fit(W@X)
+    U = svd.components_.T
+    V = svd.components_
 
-    # Find Q
-    QT = Vh[0:K]
-    Q = QT.T
+    U_torch, V_torch = torch.tensor(U,dtype=torch.float32),torch.tensor(V,dtype=torch.float32)
 
-    # UV = QQT
-    QQT = Q@QT
+    pca_latent = X@U_torch
+    pca_recon = pca_latent@V_torch
 
     # Calculate initialized reconstruction cost
-    init_reconstruction = torch.sum((X - (X@QQT))**2)
+    init_reconstruction = torch.sum((X - pca_recon)**2)
 
     # Calculate initialized orthogonality cost if off-diagonal entries of VVT = 0.1
     # Since V is orthonormal, VVT - I is 0.1 everywhere except for diagonal, which is 0
-    init_orth = torch.tensor(0.1).expand(K,K)-torch.eye(K)*0.1
-    init_orth = torch.norm(init_orth)**2
+    orthonormal_diff = torch.tensor(0.1).expand(K,K)-torch.eye(K)*0.1
+    init_orth = torch.norm(orthonormal_diff)**2
 
     # Calculate initialized sparsity cost
-    init_sparse = torch.sum(torch.abs(X@Q))
+    init_sparse = torch.sum(torch.abs(pca_latent))
 
     # Algebraically rearrange to determine initalization lambdas
     lambda_init_orth = 0.1*init_reconstruction / init_orth
     lambda_init_sparse = 0.1*init_reconstruction / init_sparse
 
+    print(f"init recon: {init_reconstruction}")
+    print(f"init sparse: {init_sparse*lambda_init_sparse}")
+    print(f"init orth: {init_orth*lambda_init_orth}")
+    print(f"lam_sparse: {lambda_init_sparse}")
+    print(f"lam_orth: {lambda_init_orth}")
+
     #---Initializing the autoencoders---#
     
     #QT = torch.randn(QT.shape)
-    autoencoder = SCA_autoencoder(N=N,K=K,Q=QT).to(device)
+    autoencoder = SCA_autoencoder(N=N,K=K,Q=U_torch.T).to(device)
+    autoencoder.V.weight = V_torch.T.to(device)
 
     #---Train the autoencoders---#
 
@@ -72,8 +83,10 @@ def SCA(X,K,epochs = 3000):
     return {
         'autoencoder_state_dict':autoencoder_state_dict,
         'losses':losses,
-        'latent':latent
+        'latent':latent,
+        'U':U_torch
     }
+
 
 
 def main():

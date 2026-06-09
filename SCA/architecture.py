@@ -24,9 +24,7 @@ class SCA_autoencoder(nn.Module):
     ):
         super().__init__()
         self.U = nn.Linear(N,K)
-        if Q != None:
-            Q = nn.Parameter(Q)
-            self.U.weight = Q
+        self.U.weight = nn.Parameter(Q)
         nn.init.constant_(self.U.bias,0)
         self.V = P.register_parametrization(nn.Linear(K,N),"weight",Sphere(dim=0))
         nn.init.constant_(self.V.bias,0)

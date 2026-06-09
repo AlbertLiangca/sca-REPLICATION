@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import itertools
+from tqdm import tqdm
 
-device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
+device = "cpu"
 
 def loss_func(X,W, encoded_X, decoded_X, V_weight, lambda_sparse = 0, lambda_orth = 0):
 
@@ -23,7 +24,9 @@ def loss_func(X,W, encoded_X, decoded_X, V_weight, lambda_sparse = 0, lambda_ort
     # Sum to calculate loss
     loss = reconstruction_loss + sparsity_loss + orth_loss
 
-    # Backpropagate
+    '''print(f"recon: {reconstruction_loss}")
+    print(f"sparse: {sparsity_loss}")
+    print(f"orth: {orth_loss}")'''
 
     return loss
 
@@ -52,7 +55,9 @@ def training_loop(X,W, autoencoder, lambda_sparse = 0, lambda_orth = 0, epochs=1
 
     losses[0] = before_loss
 
-    for t in range(epochs):
+    autoencoder.train()
+
+    for t in tqdm(range(epochs),position=0,leave=True):
 
         optimizer.zero_grad()
 
@@ -61,12 +66,6 @@ def training_loop(X,W, autoencoder, lambda_sparse = 0, lambda_orth = 0, epochs=1
 
         loss_t = loss_func(X=X,W=W, encoded_X=encoded_X, decoded_X=decoded_X,V_weight=V_weight, lambda_sparse=lambda_sparse, lambda_orth=lambda_orth)
         losses[t+1] = loss_t.item()
-        if t % 100 == 0:
-            print(f"Epoch {t+1}\n-------------------------------")
-            print(f"loss: {loss_t:>7f}  [{t:>5d}/{epochs:>5d}]")
-        if t % 1000 == 0:
-            current_lr = lr_scheduler.get_last_lr()[-1]
-            print(f"learning rate: {current_lr:>7f}")
         
         loss_t.backward()
         optimizer.step()
