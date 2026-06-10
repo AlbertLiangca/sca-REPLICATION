@@ -4,31 +4,9 @@ import torch.optim as optim
 import itertools
 from tqdm import tqdm
 
+from util import loss_func
+
 device = "cpu"
-
-def loss_func(X,W, encoded_X, decoded_X, V_weight, lambda_sparse = 0, lambda_orth = 0):
-
-    # Calculate reconstruction loss
-    
-    reconstruction_loss = torch.sum((W@(decoded_X-X))**2)
-
-    # Calculate sparsity penalty
-    sparsity_loss = lambda_sparse * torch.sum(torch.abs(encoded_X))
-
-    # Calculate orthogonality penalty
-    
-    VTV = V_weight.T@V_weight
-    I = torch.eye(V_weight.shape[1],device=device)
-    orth_loss = lambda_orth * torch.norm((VTV - I))**2
-
-    # Sum to calculate loss
-    loss = reconstruction_loss + sparsity_loss + orth_loss
-
-    '''print(f"recon: {reconstruction_loss}")
-    print(f"sparse: {sparsity_loss}")
-    print(f"orth: {orth_loss}")'''
-
-    return loss
 
 def training_loop(X,W, autoencoder, lambda_sparse = 0, lambda_orth = 0, epochs=100):
 

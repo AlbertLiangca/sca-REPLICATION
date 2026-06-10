@@ -7,21 +7,11 @@ from architecture import SCA_autoencoder
 from training import training_loop
 
 from sklearn.decomposition import TruncatedSVD
+from util import create_W
 
 device = "cpu"
 
 def SCA(X,K,W=None,epochs = 3000):
-
-    #---Sub-functions---#
-    def create_W(X):
-        '''
-        Input: T x N matrix X of T timesteps of N neurons' neural activity
-        Output: Diagonal T x T matrix W, where each entry contains the inverse sum-square at that timestep
-        '''
-        sum_sq_activity = torch.sum(X,axis=1)**2
-        inverse = 1/ sum_sq_activity
-        W = torch.diag(inverse)
-        return W
     
     # Extract T and N from data tensor
     T,N = X.shape
@@ -80,11 +70,14 @@ def SCA(X,K,W=None,epochs = 3000):
     #print(torch.allclose(before_dict['U.weight'],encoder_state_dict['U.weight']))
     latent, out = autoencoder(X.to(device))
 
+    # Sort by variance explained
+    
+
     return {
         'autoencoder_state_dict':autoencoder_state_dict,
         'losses':losses,
         'latent':latent,
-        'U':U_torch
+        'out':out
     }
 
 
