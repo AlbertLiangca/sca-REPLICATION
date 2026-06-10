@@ -11,7 +11,7 @@ from util import create_W
 
 device = "cpu"
 
-def SCA(X,K,W=None,epochs = 3000):
+def SCA(X,K,W=None,lam_sparse = None, lam_orth = None,epochs = 3000):
     
     # Extract T and N from data tensor
     T,N = X.shape
@@ -46,6 +46,11 @@ def SCA(X,K,W=None,epochs = 3000):
     # Algebraically rearrange to determine initalization lambdas
     lambda_init_orth = 0.1*init_reconstruction / init_orth
     lambda_init_sparse = 0.1*init_reconstruction / init_sparse
+
+    if lam_sparse != None:
+        lambda_init_sparse = lam_sparse
+    if lam_orth != None:
+        lambda_init_orth = lam_orth
 
     print(f"init recon: {init_reconstruction}")
     print(f"init sparse: {init_sparse*lambda_init_sparse}")
